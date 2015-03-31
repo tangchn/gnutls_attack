@@ -30,38 +30,43 @@
 //int tag_size = _gnutls_auth_cipher_tag_len(&params->write.cipher_state);
 
 typedef struct cipher_st_tag {
-	const uint8_t *key;
+	uint8_t *key;
 	unsigned int key_size;
-	const uint8_t *plaintext;
+	uint8_t *plaintext;
 	unsigned int plaintext_size;
-	const uint8_t *ciphertext;	/* also of plaintext_size */
+	uint8_t *ciphertext;	/* also of plaintext_size */
     unsigned int ciphertext_size;
-	const uint8_t *iv;
+	uint8_t *iv;
 	unsigned int iv_size;
 	gnutls_cipher_algorithm_t cipher;
 }cipher_st;
 
 typedef struct mac_st_tag {
-    const uint8_t *key;
+    uint8_t *key;
     unsigned int key_size;
-    const uint8_t *plaintext;
+    uint8_t *plaintext;
     unsigned int plaintext_size;
-    const uint8_t *output;
+    uint8_t *output;
     unsigned int output_size;
     gnutls_mac_algorithm_t mac;
 }mac_st;
 
 /*Fuction Declaration*/
-static int encrypt(gnutls_cipher_algorithm_t cipher, cipher_st* cipher_vector);
+static int encrypt(cipher_st* cipher_vector);
 
-static int decrypt(gnutls_cipher_algorithm_t cipher, cipher_st* ectors);
+static int decrypt(cipher_st* ectors, mac_st* mac_vector);
 
-static uint8_t* readPlaintext(size_t* length, char* file_name);
+static uint8_t* readPlaintext(int* length, char* file_name);
 
 static void printStringToHex(uint8_t* , size_t length);
 
 static void setHeader(uint8_t* buffer);
 static int setPlaintext(uint8_t* buffer);
-static int setMAC(gnutls_mac_algorithm_t mac,mac_st* mac_vector,
-uint8_t* buffer,int position);
-static int setPadding(uint8_t* buffer,uint16_t block_size);
+static int setMAC(mac_st* mac_vector,uint8_t* buffer);
+static int setPadding(uint8_t* buffer,uint16_t block_size, int position);
+
+static int gnutls_cipher_add_auth_t(unsigned int len);
+static void dummy_wait_t(unsigned int mac_size,
+		       gnutls_datum_t* plaintext, unsigned int pad_failed,
+		       unsigned int pad, unsigned int total);
+
