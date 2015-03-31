@@ -1,0 +1,8 @@
+#忽略后缀名为.o和.a的文件
+*.[oa]
+obj/*
+bin/*
+*.layout
+*.cbp
+*.depend
+*.out
