@@ -58,7 +58,7 @@ static int decrypt(cipher_st* ectors, mac_st* mac_vector);
 
 static uint8_t* readPlaintext(int* length, char* file_name);
 
-static void printStringToHex(uint8_t* , size_t length);
+static void printStringToHex(uint8_t* src, int from, int length);
 
 static void setHeader(uint8_t* buffer);
 static int setPlaintext(uint8_t* buffer);

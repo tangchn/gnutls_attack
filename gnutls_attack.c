@@ -32,18 +32,18 @@ int main()
 static int encrypt(cipher_st* cipher_vector)
 {
 	gnutls_cipher_hd_t hd;
-	gnutls_datum_t key, iv = {NULL, 0};
+	gnutls_datum_t key, iv;
 	int ret = 0;
 
     /*Set the key for encryption*/
 	key.size = cipher_vector->key_size;
 	key.data = (uint8_t*)malloc(key.size);
-	memset(key.data, 0xf0, key.size);
+    memcpy(key.data, cipher_vector->key, cipher_vector->key_size);
 
     /*Set the iv for encryption*/
 	iv.size = cipher_vector->iv_size;
-	iv.data = (uint8_t*)malloc(iv.size);
-	memset(iv.data, 0x0f, iv.size);
+    iv.data = (uint8_t*)malloc(iv.size);
+	memcpy(iv.data, cipher_vector->iv, cipher_vector->iv_size);
 
 	gnutls_cipher_init(&hd, cipher_vector->cipher, &key, &iv);
 
@@ -97,7 +97,7 @@ static int setPlaintext(uint8_t* buffer)
 	plaintext = readPlaintext(&ret, file_name);
 
 	printf("plaintext is: ");
-    printStringToHex(plaintext,ret);
+    printStringToHex(plaintext,0,ret);
 
     memcpy(buffer + TLS_HANDSHAKE_HEADER_LENGTH, plaintext, ret);
 
@@ -131,10 +131,10 @@ static int setPadding(uint8_t* buffer,uint16_t block_size, int position)
     return position + pad;
 }
 
-static void printStringToHex(uint8_t* src, size_t length)
+static void printStringToHex(uint8_t* src, int from, int length)
 {
     int i;
-    for(i = 0; i < length; i++)
+    for(i = from; i < length; i++)
 	{
         printf("\\x%X",*(src + i));
 	}
@@ -201,9 +201,11 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
 	gnutls_datum_t key, iv = {NULL, 0},temp_result;
 
     key.size = cipher_vector->key_size;
+    key.data = (uint8_t*)malloc(key.size);
     memcpy(key.data,cipher_vector->key,cipher_vector->key_size);
 
     iv.size = cipher_vector->iv_size;
+    iv.data = (uint8_t*)malloc(iv.size);
     memcpy(iv.data,cipher_vector->iv,cipher_vector->iv_size);
 
     ret = gnutls_cipher_init(&cipher_hd,cipher_vector->cipher,&key,&iv);
@@ -306,16 +308,23 @@ int main()
 
     /*initial the cipher*/
     cipher_name = GNUTLS_CIPHER_AES_256_CBC;
+    cipher.cipher = cipher_name;
     block_size = gnutls_cipher_get_block_size(cipher_name);
     cipher.iv_size = gnutls_cipher_get_iv_size(cipher_name);
+    cipher.iv = (uint8_t*)malloc(cipher.iv_size);
+    /*cipher.iv is \x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F...*/
+    memset(cipher.iv,'\xF0',cipher.iv_size);
     cipher.key_size = gnutls_cipher_get_key_size(cipher_name);
-    cipher.cipher = cipher_name;
+    cipher.key = (uint8_t*)malloc(cipher.key_size);
+    /*cipher.key is \x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F...*/
+    memset(cipher.key,'\x0F',cipher.key_size);
 
     /*initial the mac*/
     mac_name = GNUTLS_MAC_SHA256;
     mac.key_size = gnutls_mac_get_key_size(mac_name);
     mac.key = (uint8_t*)malloc(mac.key_size);
-    memset(mac.key,'\x0b',mac.key_size);
+    /*mac.key is \x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b...*/
+    memset(mac.key,'\x0B',mac.key_size);
     mac.output_size = MAX_HASH_LENGTH;
     mac.output = (uint8_t*)malloc(MAX_HASH_LENGTH);
     mac.mac = mac_name;
@@ -323,27 +332,34 @@ int main()
 
     /*set Header*/
     setHeader(buffer);
+    printf("Header is : ");
+    printStringToHex(buffer, 0, TLS_HANDSHAKE_HEADER_LENGTH);
     length = setPlaintext(buffer);//length of plaintext
 
     /*set MAC value*/
     length += TLS_HANDSHAKE_HEADER_LENGTH;
-    memcpy(mac.plaintext,buffer,length);
+    printf("Header & Plaintext is : ");
+    printStringToHex(buffer, 0, length);
+
     mac.plaintext_size = length;
+    mac.plaintext = (uint8_t*)malloc(mac.plaintext_size);
+    memcpy(mac.plaintext,buffer,length);
     setMAC(&mac,buffer);
 
     /*set Padding and return the total value*/
     length += MAX_HASH_LENGTH;
+    printf("Header & Plaintext & MAC is : ");
+    printStringToHex(buffer, 0, length);
     length = setPadding(buffer,block_size,length);
-
 
 	/*set the plaintext for encryption and malloc space for ciphertext*/
 	cipher.plaintext_size = length;
+    printf("The plaintext for encrytion : ");
+    printStringToHex(buffer, 0, length);
 	cipher.plaintext = (uint8_t*)malloc(cipher.plaintext_size);
 	memcpy(cipher.plaintext,buffer,length);
 	cipher.ciphertext_size = length;
 	cipher.ciphertext = (uint8_t*)malloc(cipher.ciphertext_size);
-
-
     printf("size of plaintext is %d\n",length);
 
 	/*Start Encryption*/
