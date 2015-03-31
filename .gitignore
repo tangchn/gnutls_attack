@@ -6,3 +6,4 @@ bin/*
 *.cbp
 *.depend
 *.out
+*~
