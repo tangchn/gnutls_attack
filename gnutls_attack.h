@@ -56,17 +56,17 @@ static int encrypt(cipher_st* cipher_vector);
 
 static int decrypt(cipher_st* ectors, mac_st* mac_vector);
 
-static uint8_t* readPlaintext(int* length, char* file_name);
+static uint8_t* read_plaintext(int* length, char* file_name);
 
-static void printStringToHex(uint8_t* src, int from, int length);
+static void print_string_to_hex(uint8_t* src, int from, int length);
 
-static void setHeader(uint8_t* buffer);
-static int setPlaintext(uint8_t* buffer);
-static int setMAC(mac_st* mac_vector,uint8_t* buffer);
-static int setPadding(uint8_t* buffer,uint16_t block_size, int position);
+static void set_header(uint8_t* buffer);
+static int set_plaintext(uint8_t* buffer);
+static int calculate_MAC(mac_st* mac_vector);
+static int set_padding(uint8_t* buffer,uint16_t block_size, int position);
 
 static int gnutls_cipher_add_auth_t(unsigned int len);
-static void dummy_wait_t(unsigned int mac_size,
+static void dummy_wait_t(record_parameters_st* params,
 		       gnutls_datum_t* plaintext, unsigned int pad_failed,
 		       unsigned int pad, unsigned int total);
-
+static void rdtsc(uint64_t* result);
