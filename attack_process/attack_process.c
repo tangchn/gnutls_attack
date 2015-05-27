@@ -83,7 +83,7 @@ int main(void)
     uint32_t waitting_cycles = 17000;
     uint32_t bias;
     uint32_t result[256];
-    unsigned long offest = 0x808FFC; //the address to evict
+    unsigned long offest = 0xFFC; //the address to evict,note that the start address of the ELF file is 0x8048000
 
     /* map the executable file of victim to the virtual address space of attack process*/
     int victim_fd = open("./victim.out",O_RDONLY);

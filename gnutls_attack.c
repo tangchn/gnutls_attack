@@ -441,19 +441,6 @@ int main()
 	FILE *slot_file = fopen("./slot_result","w");
 	fflush(stdout);
 
-	/*for(i = 0; i <= 255; i++)
-	{
-        temp = (uint8_t)i;
-        memset(cipher.iv,'\x00',cipher.iv_size);
-        cipher.ciphertext[cipher.ciphertext_size - block_size - 1] = temp;
-        //cipher.iv[0] = temp;//set last byte of iv from 0 to 255
-        rdtsc(&begin);
-        decrypt(&cipher,&mac);
-        rdtsc(&end);
-        fprintf(slot_file,"%llu\r\n",end - begin);
-        fflush(stdout);
-	}*/
-
     /*Recovery one byte*/
     uint16_t position;
     position = cipher.ciphertext_size - 2*block_size - 1;

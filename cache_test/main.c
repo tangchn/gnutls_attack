@@ -97,8 +97,8 @@ int main(void) {
     }
 
     fprintf(result_file,"\n\n%s\n","The time of fetching data from Memory:");
+    srand((unsigned int)time(NULL));
     for (i = 0; i < ITERATIONTIMES; i++) {
-        srand((unsigned int)time(NULL));
         j = rand()%ITERATIONTIMES;
         temp = probe_memory(&memory_data[j]);
 	temp -= bias;
